@@ -24,14 +24,14 @@ mod queries;
 mod recent;
 mod sections;
 
-pub use choices::{APPEARANCE_MODES, DARK_THEMES, LANGUAGES, LIGHT_THEMES, THEMES, WINDOW_GRAPHICS, theme_family};
+pub use choices::{APPEARANCE_MODES, DARK_THEMES, LANGUAGES, LIGHT_THEMES, RENDER_DEVICES, THEMES, WINDOW_GRAPHICS, theme_family};
 pub use dialog::{Item, Kind, Page, pages, pages_json, todo_keys};
 pub use document::{migrate, page_id, section_key};
 pub use queries::{CacheBudgets, WEB_LAYER_CACHE, WEB_MEDIA_CACHE, mask_color};
 pub use recent::{MAX_RECENT_SCRIPTS, RecentScript};
 pub use sections::{
-    Appearance, Audio, AutoSave, CompPreset, CompositionPrefs, Disk, Export, FacePrefs, General, Grids, Import, LabelPref, Memory, Previews, ProjectPrefs,
-    RotoPrefs, Scripting, Startup, ThreeD, TypePrefs, Video,
+    Appearance, Audio, AutoSave, CompPreset, CompositionPrefs, Disk, Export, FacePrefs, General, Grids, Import, LabelPref, Memory, Performance, Previews,
+    ProjectPrefs, RotoPrefs, Scripting, Startup, ThreeD, TypePrefs, Video,
 };
 use sections::{Extra, default_labels, lenient_comp_presets};
 
@@ -63,6 +63,7 @@ pub struct Prefs {
     pub disk: Disk,
     pub memory: Memory,
     pub video: Video,
+    pub performance: Performance,
     #[serde(rename = "threeD")]
     pub three_d: ThreeD,
     pub scripting: Scripting,
@@ -113,6 +114,7 @@ impl Default for Prefs {
             disk: Disk::default(),
             memory: Memory::default(),
             video: Video::default(),
+            performance: Performance::default(),
             three_d: ThreeD::default(),
             scripting: Scripting::default(),
             roto: RotoPrefs::default(),

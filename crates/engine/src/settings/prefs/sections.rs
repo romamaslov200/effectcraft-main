@@ -236,6 +236,18 @@ page!(Video {
     disable_when_background: bool = false,
 });
 
+page!(
+    /// Settings ▸ Performance: where renders and previews run (the window's viewer, renders, and
+    /// the frames the render service hands to other Craft apps).
+    Performance {
+        /// `auto` (the GPU compositor when one works, on the best adapter), `gpu` (the GPU
+        /// compositor on any adapter), `nvidia` (the GPU compositor on an NVIDIA card: the card
+        /// CUDA would run on, here driven through Direct3D 12 / Metal / Vulkan compute), `cpu`
+        /// (software only: the CPU renderer, all features still work).
+        render_device: String = "auto".into(),
+    }
+);
+
 page!(ThreeD {
     /// Default 3D renderer for new compositions: `classic` or `advanced`.
     default_renderer: String = "classic".into(),

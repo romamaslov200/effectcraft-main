@@ -41,7 +41,7 @@ fn render_with(s: &Session, project: &Project, comp: ItemId, t: Tick, scale: f64
     };
     let mut r = Renderer::new(project, s.footage.as_ref(), opts);
     r.expr = s.expr.as_deref();
-    r.accel = s.accel.as_deref();
+    r.accel = s.gpu_allowed().then(|| s.accel.as_deref()).flatten();
     r.comp_frame(comp, t)
 }
 

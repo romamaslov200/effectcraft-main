@@ -32,6 +32,13 @@ pub const DARK_THEMES: &[(&str, &str)] = &[("Dark", "dark"), ("Darker", "darker"
 /// The light family of themes: (label, `appearance.lightTheme` value).
 pub const LIGHT_THEMES: &[(&str, &str)] = &[("Light", "light")];
 
+/// Settings ▸ Performance ▸ Render Device: where renders and previews run. `auto` and `gpu` take
+/// any adapter the GPU compositor can start on; `nvidia` takes an NVIDIA card (the one CUDA would
+/// run on — the compositor itself drives it through Direct3D 12 / Metal / Vulkan compute); `cpu`
+/// is the software renderer.
+pub const RENDER_DEVICES: &[(&str, &str)] =
+    &[("Automatic (GPU when available)", "auto"), ("GPU (any adapter)", "gpu"), ("GPU: NVIDIA (CUDA-capable card)", "nvidia"), ("CPU (Software Only)", "cpu")];
+
 /// Every theme (the legacy single-theme `appearance.theme`).
 pub const THEMES: &[(&str, &str)] = &[("Dark", "dark"), ("Darker", "darker"), ("Light", "light")];
 
@@ -43,6 +50,7 @@ pub(super) fn choices(key: &str) -> Option<&'static [(&'static str, &'static str
         "appearance.appearanceMode" => Some(APPEARANCE_MODES),
         "appearance.darkTheme" => Some(DARK_THEMES),
         "appearance.lightTheme" => Some(LIGHT_THEMES),
+        "performance.renderDevice" => Some(RENDER_DEVICES),
         "appearance.theme" => Some(THEMES),
         _ => None,
     }

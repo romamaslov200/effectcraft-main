@@ -16,8 +16,15 @@ impl Session {
         let mut r = Renderer::new(&self.project, self.footage.as_ref(), self.render_opts(opts));
         r.expr = self.expr.as_deref();
         r.cache = Some(&self.layer_cache);
-        r.accel = self.accel.as_deref();
+        r.accel = self.gpu_allowed().then(|| self.accel.as_deref()).flatten();
         r
+    }
+
+    /// Whether renders and previews may use the GPU compositor: Settings ▸ Performance ▸ Render
+    /// Device is not `cpu`. The project's own Software Rendering still wins in the pipeline, so
+    /// this only ever takes the GPU away.
+    pub fn gpu_allowed(&self) -> bool {
+        !self.prefs.performance.render_device.eq_ignore_ascii_case("cpu")
     }
 
     /// `opts` with the render prefs (nested switches, draft shadows), as [`Session::renderer`].

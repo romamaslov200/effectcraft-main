@@ -91,7 +91,7 @@ mod yuv;
 
 use std::sync::Arc;
 
-pub use context::{GpuContext, GpuImage, TransferStats};
+pub use context::{AdapterPick, GpuContext, GpuImage, TransferStats};
 pub use diagnostics::{ScopedError, ScopedErrorObserver};
 use effectcraft_effects::Buf;
 use effectcraft_project::ItemId;
@@ -157,6 +157,13 @@ impl Gpu {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn try_headless() -> Result<Gpu, String> {
         pollster::block_on(GpuContext::request()).map(Gpu::from_context)
+    }
+
+    /// [`Gpu::try_headless`] on the adapter Settings ▸ Performance ▸ Render Device names: the best
+    /// one, or one from a vendor (`AdapterPick::Vendor(0x10DE)`: an NVIDIA card).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn try_headless_pick(pick: context::AdapterPick) -> Result<Gpu, String> {
+        pollster::block_on(GpuContext::request_pick(pick)).map(Gpu::from_context)
     }
 
     /// On an existing device (the desktop app shares egui-wgpu's).

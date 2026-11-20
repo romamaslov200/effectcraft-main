@@ -579,7 +579,7 @@ fn generate(s: &mut Session, p: &Value) -> Result<Value> {
     // The fill's own GPU backend (Mercury GPU Acceleration; none under Software Only or
     // without a compositor). The frames themselves still render on the CPU here, as for every
     // desktop analysis (`offload::job_accel`): only the fill's own work moves to the device.
-    let accel = if s.project.settings.gpu_acceleration { s.accel.clone() } else { None };
+    let accel = if s.project.settings.gpu_acceleration && s.gpu_allowed() { s.accel.clone() } else { None };
     s.spawn_task("contentFill", format!("Content-Aware Fill: {name}"), wait, move |ctl| {
         let fill = accel.as_deref().and_then(|a| a.inpaint());
         let paths = effectcraft_render::passes::block_on(run_plan(

@@ -113,6 +113,53 @@ impl EffectcraftApp {
         ctx.request_repaint();
     }
 
+    /// Settings ▸ Performance ▸ Render Device changed while running: a GPU choice (Automatic, any
+    /// GPU, NVIDIA) builds the compositor again when none is running, and CPU drops it — the
+    /// device stays for drawing, nothing stays resident for compositing, and the viewer renders on
+    /// the CPU from the next frame ([`Session::gpu_allowed`] gates the render paths either way).
+    pub(crate) fn apply_render_device(&mut self, ctx: &egui::Context) {
+        // The browser builds the compositor in place, on the main thread: no worker to check.
+        #[cfg(not(target_arch = "wasm32"))]
+        let building = self.gpu_build.is_some();
+        #[cfg(target_arch = "wasm32")]
+        let building = false;
+        if self.session.gpu_allowed() {
+            // There, being built, or lost for good: nothing to start.
+            let lost = self.gpu_failures.as_ref().is_some_and(|bridge| bridge.failure().is_some());
+            if self.gpu.is_some() || building || lost {
+                return;
+            }
+            // Off while CPU was chosen (or the build failed): let `init_gpu` try once more.
+            if self.gpu_checked {
+                self.gpu_checked = false;
+                ctx.request_repaint();
+            }
+            return;
+        }
+        let had = self.gpu.is_some() || self.gpu_build.is_some();
+        self.gpu = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.gpu_build = None;
+        }
+        self.session.accel = None;
+        self.session.accel_note = Some("Render Device is CPU (Settings ▸ Performance)".into());
+        if !had {
+            return;
+        }
+        self.frames.retire_gpu();
+        self.session.layer_cache.clear();
+        if let Some(rs) = &self.wgpu {
+            let mut renderer = rs.renderer.write();
+            if let Some((id, _, _)) = &self.viewer_native {
+                renderer.free_texture(id);
+            }
+            drop(renderer);
+        }
+        self.viewer_native = None;
+        ctx.request_repaint();
+    }
+
     /// After the graphics device is lost, eframe's renderer cannot draw again: any mesh makes
     /// egui-wgpu panic on the main thread when it cannot stage its index buffer (#591). Draw
     /// nothing from then on, auto-save a project with unsaved changes (keeping the crash
@@ -183,6 +230,13 @@ impl EffectcraftApp {
             info.device_type,
             if info.driver.is_empty() { String::new() } else { format!(", {} {}", info.driver, info.driver_info) }
         ));
+        // Settings ▸ Performance ▸ Render Device ▸ CPU: no compositor at all — nothing to compile
+        // and nothing resident, the viewer composites on the CPU (the display pass still uses
+        // this device). Chosen again, [`Self::apply_render_device`] lets this build it.
+        if !self.session.gpu_allowed() {
+            self.session.accel_note = Some("Render Device is CPU (Settings ▸ Performance)".into());
+            return;
+        }
         #[cfg(not(target_arch = "wasm32"))]
         if self.spawn_gpu_build(ctx, rs) {
             return;

@@ -1,4 +1,4 @@
-use super::choices::{APPEARANCE_MODES, DARK_THEMES, LANGUAGES, LIGHT_THEMES, WINDOW_GRAPHICS};
+use super::choices::{APPEARANCE_MODES, DARK_THEMES, LANGUAGES, LIGHT_THEMES, RENDER_DEVICES, WINDOW_GRAPHICS};
 use super::{Value, json};
 
 // ---------------------------------------------------------------- schema (Settings dialog)
@@ -178,6 +178,16 @@ pub fn pages() -> Vec<Page> {
                 s("previews.zoomQuality", "Viewer Zoom Quality", Kind::Choice(&[("Faster", "faster"), ("More Accurate", "moreAccurate")]), true),
                 s("previews.displayProfile", "Display Color Space", Kind::Choice(&[("sRGB", "srgb"), ("Display P3", "p3")]), true),
                 Button { label: "GPU Information...", command: "app.gpuInfo", params: "{}" },
+            ],
+        },
+        Page {
+            id: "performance",
+            title: "Performance",
+            items: vec![
+                s("performance.renderDevice", "Render Device", Kind::Choice(RENDER_DEVICES), true),
+                Note(
+                    "Renders and previews use the GPU compositor (compute shaders through Direct3D 12 here; the same card CUDA would use) unless CPU is chosen. Linked previews in other Craft apps follow this setting too.",
+                ),
             ],
         },
         Page {

@@ -24,6 +24,8 @@ impl EffectcraftApp {
         self.ui.cache_when_idle = p.previews.cache_frames_when_idle;
         self.ui.viewer.fast_preview = p.previews.fast_previews;
         self.frames.set_budget(p.cache_budgets(self.session.sys_memory).preview);
+        // Settings ▸ Performance ▸ Render Device: starts or drops the GPU compositor.
+        self.apply_render_device(ctx);
     }
 
     /// Change settings from the UI (applied next frame and saved).

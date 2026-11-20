@@ -1365,6 +1365,45 @@ fn render_backend_says_why_it_renders_on_the_cpu() {
     assert_eq!(s.execute("render.backend", json!({"backend": "cpu"})).unwrap()["why"], json!("the project's renderer is Software Rendering"));
 }
 
+/// Settings ▸ Performance ▸ Render Device: `cpu` keeps the attached compositor out of every
+/// render (`Session::renderer` is what previews, renders and control frames go through), the GPU
+/// choices leave it in, and a value that isn't one of the choices is refused.
+#[test]
+fn render_device_setting_gates_the_gpu_compositor() {
+    use effectcraft_render::{Accelerator, FxStep, Image, Renderer};
+
+    struct Card;
+    impl Accelerator for Card {
+        fn name(&self) -> String {
+            "NVIDIA GeForce RTX 4060 (Dx12)".into()
+        }
+        fn comp_frame(&self, _: &Renderer, _: crate::project::ItemId, _: crate::Tick) -> Option<Image> {
+            None
+        }
+        fn supports_effect(&self, _: &str) -> bool {
+            false
+        }
+        fn effects(&self, _: &[FxStep], _: &effectcraft_effects::Buf, _: Option<f32>) -> Option<effectcraft_effects::Buf> {
+            None
+        }
+    }
+
+    let mut s = Session::default();
+    s.accel = Some(Arc::new(Card));
+    assert!(s.gpu_allowed(), "a compositor is used by default");
+    assert!(s.renderer(Default::default()).accel.is_some());
+
+    s.execute("prefs.set", json!({"key": "performance.renderDevice", "value": "cpu"})).unwrap();
+    assert!(!s.gpu_allowed());
+    assert!(s.renderer(Default::default()).accel.is_none(), "CPU chosen: the compositor stays out of renders");
+    assert!(s.accel.is_some(), "the compositor itself is the host's to drop");
+
+    s.execute("prefs.set", json!({"key": "performance.renderDevice", "value": "nvidia"})).unwrap();
+    assert!(s.renderer(Default::default()).accel.is_some(), "an NVIDIA card is a GPU choice");
+    let err = s.execute("prefs.set", json!({"key": "performance.renderDevice", "value": "cuda"})).unwrap_err().to_string();
+    assert!(err.contains("performance.renderDevice"), "{err}");
+}
+
 /// Display labels are descriptive; machine-readable settings remain the same.
 #[test]
 fn renderer_labels_keep_their_stable_machine_values() {

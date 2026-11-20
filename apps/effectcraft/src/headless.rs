@@ -37,6 +37,7 @@ pub fn run(port: u16, project: Option<String>, watch_stdin: bool) -> i32 {
         }
         log::info!("render service: opened {path}");
     }
+    attach_compositor(&mut session);
     let mut app = EffectcraftApp::new(session);
     let ctx = egui::Context::default();
     let rx = super::control_server::start(port, ctx.clone());
@@ -113,4 +114,29 @@ pub fn run(port: u16, project: Option<String>, watch_stdin: bool) -> i32 {
 /// Where the service is told to run. Kept out of [`run`] so the argument rules read on their own.
 pub fn port_of(control: Option<u16>) -> Result<u16, String> {
     control.ok_or_else(|| "--headless needs --control <port>: the port the host connects to".to_owned())
+}
+/// Settings ▸ Performance ▸ Render Device: the frames this service hands out render on the GPU
+/// compositor unless the user chose the CPU. The window borrows eframe's device; a service has no
+/// window, so it makes one of its own — without this every linked preview (FilmCraft asking for
+/// the frames) rendered on the CPU, whatever the project's renderer said.
+fn attach_compositor(session: &mut effectcraft_engine::Session) {
+    let device = session.prefs.performance.render_device.clone();
+    if !session.gpu_allowed() {
+        session.accel_note = Some("Render Device is CPU (Settings ▸ Performance)".into());
+        log::info!("render service: Render Device is CPU; frames render on the CPU");
+        return;
+    }
+    // `nvidia` names the card CUDA would run on; the compositor drives it through D3D12/Metal.
+    let pick = if device.eq_ignore_ascii_case("nvidia") { effectcraft_gpu::AdapterPick::Vendor(0x10DE) } else { effectcraft_gpu::AdapterPick::Best };
+    match effectcraft_gpu::Gpu::try_headless_pick(pick) {
+        Ok(g) => {
+            session.accel = Some(std::sync::Arc::new(g));
+            let name = session.accel.as_ref().map(|a| a.name()).unwrap_or_default();
+            log::info!("render service: GPU compositor on {name}");
+        }
+        Err(e) => {
+            log::warn!("render service: no GPU compositor ({e}); frames render on the CPU");
+            session.accel_note = Some(format!("no GPU compositor ({e})"));
+        }
+    }
 }

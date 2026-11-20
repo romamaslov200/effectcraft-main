@@ -334,6 +334,40 @@ async fn adapter_by_name(instance: &wgpu::Instance) -> Option<Result<wgpu::Adapt
         .collect();
     Some(match_adapter_name(want, &adapters).map(|i| all.swap_remove(i)))
 }
+
+/// The first hardware adapter of a PCI vendor (Settings ▸ Performance ▸ Render Device ▸ GPU:
+/// NVIDIA passes 0x10DE). A software rasteriser is never taken, whatever its vendor: the point of
+/// naming a vendor is the card's compute throughput. `Err` lists what there was instead.
+#[cfg(not(target_arch = "wasm32"))]
+async fn adapter_from_vendor(instance: &wgpu::Instance, vendor: u32) -> Result<wgpu::Adapter, String> {
+    let all = instance.enumerate_adapters(wgpu::Backends::all()).await;
+    let mut seen: Vec<String> = Vec::new();
+    let mut picked: Option<(usize, wgpu::DeviceType)> = None;
+    for (i, a) in all.iter().enumerate() {
+        let info = a.get_info();
+        seen.push(format!("{} ({:?}, {:?}, vendor 0x{:04X})", info.name, info.backend, info.device_type, info.vendor));
+        if info.vendor != vendor || info.device_type == wgpu::DeviceType::Cpu {
+            continue;
+        }
+        // Discrete before integrated: an NVIDIA card must win over a virtual display adapter.
+        let better = match picked {
+            None => true,
+            Some((_, t)) => t != wgpu::DeviceType::DiscreteGpu && info.device_type == wgpu::DeviceType::DiscreteGpu,
+        };
+        if better {
+            picked = Some((i, info.device_type));
+        }
+    }
+    match picked {
+        Some((i, _)) => Ok(all.into_iter().nth(i).expect("index from the same list")),
+        None if seen.is_empty() => Err(format!("no adapter from vendor 0x{vendor:04X}: the platform listed none")),
+        None => Err(format!("no adapter from vendor 0x{vendor:04X} (adapters: {})", seen.join(", "))),
+    }
+}
+#[cfg(target_arch = "wasm32")]
+async fn adapter_from_vendor(_: &wgpu::Instance, vendor: u32) -> Result<wgpu::Adapter, String> {
+    Err(format!("no adapter from vendor 0x{vendor:04X}: the browser exposes only the default adapter"))
+}
 /// `WGPU_POWER_PREF` (`low` / `high` / `none`), default HighPerformance. wgpu ignores an
 /// unknown value silently; warn so a typo is noticed.
 #[cfg(not(target_arch = "wasm32"))]
@@ -669,6 +703,19 @@ struct Uploads {
     map: HashMap<usize, Upload>,
     bytes: usize,
     clock: u64,
+}
+
+/// Which adapter a compositor of its own (the render service, the CLI, tests) takes. Settings ▸
+/// Performance ▸ Render Device picks between them; the window always uses eframe's own adapter.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AdapterPick {
+    /// The best adapter the platform reports (high performance: discrete first).
+    #[default]
+    Best,
+    /// The first adapter of this PCI vendor that is not a software rasteriser. 0x10DE is NVIDIA,
+    /// whose card the GPU compositor drives through Direct3D 12 compute (the same card CUDA would
+    /// run on; the compositor's kernels are WGSL, not CUDA).
+    Vendor(u32),
 }
 
 /// The device and everything compiled for it.
@@ -1419,6 +1466,12 @@ impl GpuContext {
     /// A device of its own on the best adapter, without blocking (a browser worker: WebGPU
     /// only; natively any backend). `Err` says why there is none.
     pub async fn request() -> Result<GpuContext, String> {
+        GpuContext::request_pick(AdapterPick::Best).await
+    }
+
+    /// [`GpuContext::request`] on the adapter `pick` names: the best one, or one from a vendor
+    /// (Settings ▸ Performance ▸ Render Device ▸ GPU: NVIDIA). `Err` says why there is none.
+    pub async fn request_pick(pick: AdapterPick) -> Result<GpuContext, String> {
         #[allow(unused_mut)]
         let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
         #[cfg(not(target_arch = "wasm32"))]
@@ -1438,10 +1491,13 @@ impl GpuContext {
         let (adapter, by_name) = match adapter_by_name(&instance).await {
             Some(a) => (a?, true),
             None => (
-                instance
-                    .request_adapter(&wgpu::RequestAdapterOptions { power_preference: power_pref_from_env(), ..Default::default() })
-                    .await
-                    .map_err(|e| format!("no adapter: {e}"))?,
+                match pick {
+                    AdapterPick::Best => instance
+                        .request_adapter(&wgpu::RequestAdapterOptions { power_preference: power_pref_from_env(), ..Default::default() })
+                        .await
+                        .map_err(|e| format!("no adapter: {e}"))?,
+                    AdapterPick::Vendor(vendor) => adapter_from_vendor(&instance, vendor).await?,
+                },
                 false,
             ),
         };

@@ -1940,6 +1940,7 @@ dependencies = [
  "cpal",
  "craft-update",
  "effectcraft-engine",
+ "effectcraft-gpu",
  "effectcraft-host",
  "effectcraft-ui-egui",
  "eframe",

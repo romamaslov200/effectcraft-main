@@ -11,6 +11,9 @@ workspace = true
 
 [dependencies]
 effectcraft-engine = { workspace = true }
+# Settings ▸ Performance ▸ Render Device: the render service builds a compositor of its own (the
+# window shares eframe's device).
+effectcraft-gpu = { workspace = true }
 effectcraft-host = { workspace = true }
 effectcraft-ui-egui = { workspace = true }
 egui = { workspace = true }
