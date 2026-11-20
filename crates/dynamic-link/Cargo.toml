@@ -1,0 +1,20 @@
+[package]
+name = "effectcraft-dynamic-link"
+description = "Dynamic Link model: a live reference to a comp or sequence in another Craft app, resolved over its control channel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+base64 = { version = "0.22", default-features = false }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tempfile = { workspace = true }
