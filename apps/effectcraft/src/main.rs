@@ -31,6 +31,7 @@ mod native_menu;
 // dialogs without blocking the frame.
 #[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
 mod file_dialogs;
+mod headless;
 mod window;
 
 use effectcraft_ui_egui::EffectcraftApp;
@@ -86,6 +87,15 @@ struct Args {
     demo: bool,
     /// Show or skip the Home screen (`--home`), else the Startup preference decides.
     home: Option<bool>,
+    /// Run the render service: no window, the project opened, the control channel answered
+    /// (`--headless`, which also brings `--control`).
+    headless: bool,
+    /// Take the keyboard focus even when started for a host (`--focus`): a window the user asked
+    /// for from the host's menu must come to the front, not open behind it.
+    focus: bool,
+    /// End the render service when the host that started it goes away (`--watch-stdin`): the host
+    /// holds the write end of our stdin, so its death is a closed pipe.
+    watch_stdin: bool,
 }
 
 /// Parse the arguments after the program name; `Ok(None)` for `--version`. `env_port` is
@@ -106,6 +116,9 @@ fn parse_args(args: impl IntoIterator<Item = String>, env_port: Result<String, s
             "--demo" => out.demo = true,
             "--empty" => out.demo = false,
             "--home" => out.home = Some(true),
+            "--headless" => out.headless = true,
+            "--focus" => out.focus = true,
+            "--watch-stdin" => out.watch_stdin = true,
             "--version" => return Ok(None),
             _ => match a.strip_prefix("--control=") {
                 Some(v) => out.control_port = Some(control_port("--control", Some(v))?),
@@ -221,7 +234,7 @@ fn run_desktop(reporter: &crash_report::Shutdown) -> eframe::Result {
     // feed the compatibility report.
     effectcraft_engine::logging::install();
     effectcraft_engine::logging::install_panic_hook();
-    let Args { control_port, files, demo, home } = match parse_args(std::env::args().skip(1), std::env::var("EFFECTCRAFT_CONTROL_PORT")) {
+    let Args { control_port, files, demo, home, headless, focus, watch_stdin } = match parse_args(std::env::args().skip(1), std::env::var("EFFECTCRAFT_CONTROL_PORT")) {
         Ok(Some(args)) => args,
         Ok(None) => {
             println!("effectcraft {}", env!("CARGO_PKG_VERSION"));
@@ -233,6 +246,19 @@ fn run_desktop(reporter: &crash_report::Shutdown) -> eframe::Result {
             std::process::exit(1);
         }
     };
+    // The render service: the project and the control channel, with nothing drawn. Nothing of the
+    // window path (session log aside) is set up for it.
+    if headless {
+        let port = match headless::port_of(control_port) {
+            Ok(port) => port,
+            Err(e) => {
+                eprintln!("effectcraft: {e}");
+                std::process::exit(1);
+            }
+        };
+        let project = files.iter().find(|f| is_project_file(f)).cloned();
+        std::process::exit(headless::run(port, project, watch_stdin));
+    }
     // The session log lives in the settings folder (`Logs/effectcraft.log`, the previous two runs
     // kept): a launch from the Dock or a menu has no terminal. Opened after the arguments, so
     // `--version` leaves no file behind; records logged until now are written to it first.
@@ -277,7 +303,7 @@ fn run_desktop(reporter: &crash_report::Shutdown) -> eframe::Result {
             .with_min_inner_size(window::MIN_SIZE)
             .with_drag_and_drop(true)
             // Started for an agent (`--control`): open without taking the user's keyboard focus.
-            .with_active(control_port.is_none())
+            .with_active(control_port.is_none() || focus)
             .with_icon(app_icon())
             // Wayland matches the window to `ai.storyteller.effectcraft.desktop` by this ID.
             .with_app_id(appimage::APP_ID),
